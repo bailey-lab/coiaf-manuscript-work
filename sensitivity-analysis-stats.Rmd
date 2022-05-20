@@ -1,0 +1,140 @@
+---
+title: "Sensitivity Analysis Stats"
+author: "Aris Paschalidis"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  comment = "#>",
+  echo = FALSE
+)
+
+library(coiaf)
+```
+
+```{r stats function}
+pstats <- function(data) {
+  data <- data$boot_error %>% 
+    tibble::as_tibble() %>% 
+    tidyr::unnest(cols = c(mae, lower, upper))
+  
+  c(
+    mae = round(kruskal.test(mae ~ coi_method, data)$p.value, 3), 
+    bias = round(kruskal.test(bias ~ coi_method, data)$p.value, 3)
+  )
+}
+
+# Compute KW when the COI is leq or geq than a value
+kw_threshold <- function(data, parameter, coi, comparison = c("geq", "leq")) {
+  comparison <- rlang::arg_match(comparison)
+  filtered_data <- switch(comparison,
+    geq = dplyr::filter(data, coi >= {{coi}}),
+    leq = dplyr::filter(data, coi <= {{coi}})
+  )
+  
+  kruskal.test(filtered_data$mae ~ filtered_data[[parameter]])
+}
+
+# Find all KW p values for a parameter. At each COI, find KW for all COI greater
+# then the current COI. For example, if COI = 5, we look at KW for COI =
+# 5 to max(coi).
+pthreshold <- function(data, parameter) {
+  max_coi <- max(data$coi)
+  
+  pvalues <- purrr::map_dfr(seq_len(max_coi), function(i) {
+    kw <- kw_threshold(data, parameter, i)
+    c(coi = i, pvalue = kw$p.value)
+  })
+  
+  pvalues
+}
+```
+
+
+## Overall Performance
+
+```{r read data}
+discrete <- readRDS(here::here("vignettes", "saved_analysis_discrete.rds"))
+overall <- discrete$toverall
+```
+
+```{r estimation stats}
+# Look at range of estimation at a COI of 20 for Frequency Method
+overall$predicted_coi %>% 
+  dplyr::select(dplyr::starts_with("coi_20")) %>% 
+  summary()
+
+# Max MAE
+max(unlist(overall$boot_error$mae), na.rm = TRUE)
+
+# MAE and bias p values
+pstats(overall)
+```
+
+## Coverage
+
+```{r coverage variant method}
+coverage_1 <- discrete$tcoverage_1$boot_error %>% 
+  tibble::as_tibble() %>% 
+  tidyr::unnest(cols = c(mae, lower, upper))
+
+# Overall KW
+kruskal.test(mae ~ coverage, data = coverage_1)
+
+# Examine the p value when COI is greater than a threshold
+pthreshold(coverage_1, "coverage")
+```
+
+```{r coverage frequency method}
+coverage_2 <- discrete$tcoverage_2$boot_error %>% 
+  tibble::as_tibble() %>% 
+  tidyr::unnest(cols = c(mae, lower, upper))
+
+# Overall KW
+kruskal.test(mae ~ coverage, data = coverage_2)
+
+# Examine the p value when COI is greater than a threshold
+pthreshold(coverage_2, "coverage")
+```
+
+## Number of Loci
+
+```{r loci variant method}
+loci_1 <- discrete$tloci_1$boot_error %>% 
+  tibble::as_tibble() %>% 
+  tidyr::unnest(cols = c(mae, lower, upper))
+
+# Overall KW
+kruskal.test(mae ~ loci, data = loci_1)
+
+# Examine the p value when COI is greater than a threshold
+pthreshold(loci_1, "loci")
+```
+
+```{r loci frequency method}
+loci_2 <- discrete$tloci_2$boot_error %>% 
+  tibble::as_tibble() %>% 
+  tidyr::unnest(cols = c(mae, lower, upper))
+
+# Overall KW
+kruskal.test(mae ~ loci, data = loci_2)
+
+# Examine the p value when COI is greater than a threshold
+pthreshold(loci_2, "loci")
+```
+
+
+```{r stats}
+pstats(overall)
+
+# Quantifying underestimation
+overall$boot_error %>% 
+  dplyr::filter(coi_method == "variant") %>% 
+  dplyr::pull(bias) %>% 
+  median()
+```
