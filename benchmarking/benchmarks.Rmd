@@ -1,0 +1,393 @@
+---
+title: "Benchmarks"
+author: "Aris Paschalidis"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+# devtools::install_github("OJWatson/McCOILR")
+library(McCOILR)
+library(coiaf)
+library(patchwork)
+```
+
+# Comparing the two {coiaf} methods
+
+| Variant Method | Frequency Method |
+| :------------: | :--------------: |
+| Discrete       | Discrete         |
+| Continuous     | Continuous       |
+
+```{r function definitions}
+# Set seed
+# set.seed(101)
+
+# Create function to take variable COI and # of loci
+create_data <- function(coi, n_loci) {
+  plmaf <- stats::rbeta(n_loci, 1, 5)
+  plmaf[plmaf > 0.5] <- 1 - plmaf[plmaf > 0.5]
+
+  sim_biallelic(coi = coi, plmaf = plmaf)
+}
+```
+
+```{r bench fns, include = FALSE}
+bench_plot <- function(bench, title = NULL) {
+  bench <- dplyr::rename(bench, Loci = n_loci, COI = coi)
+
+  ggplot2::autoplot(bench, show.legend = TRUE, alpha = 0.8) +
+    theme_coiaf() +
+    ggplot2::labs(y = "Time", x = "Estimation Method", title = title) +
+    ggplot2::scale_color_discrete(
+      name = "Garbage Collection",
+      labels = c("None", "Level 0", "Level 1", "Level 2")
+    ) +
+    ggplot2::theme(legend.title = ggplot2::element_text(hjust = 0.5)) +
+    ggplot2::guides(x = ggplot2::guide_axis(angle = 45))
+}
+
+bench_stats <- function(bench) {
+  bench <- dplyr::rename(bench, Loci = n_loci, COI = coi)
+
+  stats <- bench %>%
+    dplyr::select(expression, COI, Loci, time) %>%
+    dplyr::mutate(expression = as.character(expression))
+
+  if ("Discrete" %in% stats$expression) {
+    discrete <- stats %>%
+      dplyr::filter(expression == "Discrete") %>%
+      dplyr::pull(time) %>% 
+      unlist()
+
+    continuous <- stats %>%
+      dplyr::filter(expression != "Discrete") %>%
+      dplyr::pull(time) %>% 
+      unlist()
+
+    pvalue <- wilcox.test(discrete, continuous, paired = TRUE)$p.value
+    means <- c(discrete = mean(discrete), continuous = mean(continuous))
+  } else if ("Variant" %in% stats$expression) {
+    variant <- stats %>%
+      dplyr::filter(expression == "Variant") %>%
+      dplyr::pull(time) %>% 
+      unlist()
+
+    frequency <- stats %>%
+      dplyr::filter(expression != "Variant") %>%
+      dplyr::pull(time) %>% 
+      unlist()
+
+   pvalue <- wilcox.test(variant, frequency, paired = TRUE)$p.value
+   means <- c(variant = mean(variant), frequency = mean(frequency))
+  }
+  
+  c(format(means, scientific = FALSE), pvalue = pvalue)
+}
+```
+
+```{r disc vs cont variant method}
+bench_var <- bench::press(
+  coi = c(1, seq(5, 25, 5)),
+  n_loci = c(100, 1000, 5000, 10000),
+  {
+    dat <- create_data(coi, n_loci)
+    bench::mark(
+      min_iterations = 100,
+      Discrete = compute_coi(dat, "sim"),
+      Continuous = optimize_coi(dat, "sim"),
+      check = FALSE
+    )
+  }
+)
+
+bench_plot(bench_var)
+bench_stats(bench_var)
+```
+
+```{r disc vs cont freq method}
+bench_freq <- bench::press(
+  coi = c(1, seq(5, 25, 5)),
+  n_loci = c(100, 1000, 5000, 10000),
+  {
+    dat <- create_data(coi, n_loci)
+    bench::mark(
+      min_iterations = 100,
+      Discrete = compute_coi(dat, "sim", coi_method = "frequency"),
+      Continuous = optimize_coi(dat, "sim", coi_method = "frequency"),
+      check = FALSE
+    )
+  }
+)
+
+bench_plot(bench_freq)
+bench_stats(bench_freq)
+```
+
+```{r combine discrete vs continuous plots}
+bench_plot(bench_var) + bench_plot(bench_freq) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    tag_levels = "A",
+    theme = theme(plot.tag = element_text(size = 10))
+  ) &
+  theme(plot.tag = element_text(face = "bold")) &
+  theme(legend.position = "bottom")
+
+ggsave(
+  "internal/bench-images/bench-soln-methods.png",
+  device = "png", 
+  width = 2500, 
+  height = 1500, 
+  units = "px", 
+  dpi = "print"
+)
+```
+
+
+```{r var vs freq discrete}
+bench_dis <- bench::press(
+  coi = c(1, seq(5, 25, 5)),
+  n_loci = c(100, 1000, 5000, 10000),
+  {
+    dat <- create_data(coi, n_loci)
+    bench::mark(
+      min_iterations = 100,
+      Variant = compute_coi(dat, "sim", coi_method = "variant"),
+      Frequency = compute_coi(dat, "sim", coi_method = "frequency"),
+      check = FALSE
+    )
+  }
+)
+
+bench_plot(bench_dis)
+bench_stats(bench_dis)
+```
+
+```{r var vs freq discrete}
+bench_cont <- bench::press(
+  coi = c(1, seq(5, 25, 5)),
+  n_loci = c(100, 1000, 5000, 10000),
+  {
+    dat <- create_data(coi, n_loci)
+    bench::mark(
+      min_iterations = 100,
+      Variant = optimize_coi(dat, "sim", coi_method = "variant"),
+      Frequency = optimize_coi(dat, "sim", coi_method = "frequency"),
+      check = FALSE
+    )
+  }
+)
+
+bench_plot(bench_cont)
+bench_stats(bench_cont)
+```
+
+```{r combine discrete vs continuous plots}
+bench_plot(bench_dis) + bench_plot(bench_cont) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    tag_levels = "A",
+    theme = theme(plot.tag = element_text(size = 10))
+  ) &
+  theme(plot.tag = element_text(face = "bold")) &
+  theme(legend.position = "bottom")
+
+ggsave(
+  "internal/bench-images/bench-estim-methods.png",
+  device = "png", 
+  width = 2500, 
+  height = 1500, 
+  units = "px", 
+  dpi = "print"
+)
+```
+
+
+From these results, we can see that for small numbers of loci, the discrete
+method is almost twice as fast as the continuous method. However, as the number
+of loci increases, this difference becomes smaller.
+
+```{r coiaf vs rmcl}
+set.seed(500)
+
+n_loci <- 1000
+n_samples <- 100
+missingness <- 0.05
+coi <- as.integer(runif(n_samples, 1, 10))
+plmaf <- runif(n_loci, 0, 0.5)
+
+# create genotype matrix for this using sim biallelic
+f <- lapply(seq_len(n_samples), function(x) {
+  coiaf::sim_biallelic(coi[x], plmaf, epsilon = 0.05)
+})
+
+# now let's create out genotype matrix for RMCL
+gts <- lapply(f, function(x) {
+  gtmat <- x$data$wsmaf
+  gtmat[gtmat >= 0.95] <- 1
+  gtmat[gtmat <= 0.05] <- 1
+  gtmat[gtmat < 0.95 & gtmat > 0.05] <- 0.5
+  gtmat[which(as.logical(rbinom(100, 1, 0.05)))] <- -1
+  return(gtmat)
+})
+
+# group together to get out gtmat
+gtmat <- do.call(rbind, gts)
+rownames(gtmat) <- letters[seq_len(nrow(gtmat))]
+colnames(gtmat) <- paste0("pos_", seq_len(ncol(gtmat)))
+gtmat <- as.data.frame(gtmat)
+
+# Run RMCL categorical
+tf <- "test.txt"
+td <- tempdir()
+runs <- 10000
+
+bench::system_time(
+  out_a <- McCOIL_categorical(
+    data = gtmat,
+    maxCOI = 25,
+    totalrun = runs,
+    burnin = 1000,
+    M0 = 5,
+    threshold_ind = round(ncol(gtmat) * 0.25),
+    threshold_site = round(nrow(gtmat) * 0.20),
+    err_method = 3,
+    thin = 0.1,
+    path = td,
+    output = tf
+  )
+)
+out_b <- McCOIL_categorical(
+  data = gtmat,
+  maxCOI = 25,
+  totalrun = runs,
+  burnin = 1000,
+  M0 = 5,
+  threshold_ind = round(ncol(gtmat) * 0.25),
+  threshold_site = round(nrow(gtmat) * 0.20),
+  err_method = 3,
+  thin = 0.1,
+  path = td, output = tf
+)
+
+# check for convergence between runs are they close? - yes
+cbind(
+  head(as.integer(out_a$median), n_samples),
+  head(as.integer(out_b$median), n_samples)
+)
+
+# what is the error look like
+hist(coi - head(as.integer(out_a$median), n_samples))
+
+# mean error of 5 and took 12.5 seconds (correct to halve running time)
+mean(coi - head(as.integer(out_a$median), n_samples))
+
+# Run COIAF
+bench::mark(
+  coiaf = lapply(f, coiaf::compute_coi, "sim"),
+  min_iterations = 100
+)
+
+# takes 0.3 seconds, mean error 0.2
+hist(coi - unlist(lapply(out2, "[[", "coi")))
+mean(coi - unlist(lapply(out2, "[[", "coi")))
+```
+
+```{r mark rmcl and coiaf}
+benchmark <- function(gtmat, f) {
+  bench::mark(
+    rmcl = McCOIL_categorical(
+      data = gtmat,
+      maxCOI = 25,
+      totalrun = 100000,
+      burnin = 1000,
+      M0 = 5,
+      threshold_ind = round(ncol(gtmat) * 0.25),
+      threshold_site = round(nrow(gtmat) * 0.20),
+      err_method = 3,
+      thin = 0.1,
+      path = tempdir(),
+    ),
+    coiaf = lapply(f, coiaf::compute_coi, "sim"),
+    min_iterations = 1,
+    check = FALSE
+  )
+}
+```
+
+```{r submit to slurm}
+# Submit job to slurm
+benchmark <- function(n_loci, n_samples, min_iterations) {
+  set.seed(500)
+
+  missingness <- 0.05
+  coi <- as.integer(runif(n_samples, 1, 10))
+  plmaf <- runif(n_loci, 0, 0.5)
+
+  # create genotype matrix for this using sim biallelic
+  f <- lapply(seq_len(n_samples), function(x) {
+    coiaf::sim_biallelic(coi[x], plmaf, epsilon = 0.05)
+  })
+
+  # now let's create out genotype matrix for RMCL
+  gts <- lapply(f, function(x) {
+    gtmat <- x$data$wsmaf
+    gtmat[gtmat >= 0.95] <- 1
+    gtmat[gtmat <= 0.05] <- 1
+    gtmat[gtmat < 0.95 & gtmat > 0.05] <- 0.5
+    gtmat[which(as.logical(rbinom(100, 1, 0.05)))] <- -1
+    return(gtmat)
+  })
+
+  # group together to get out gtmat
+  gtmat <- do.call(rbind, gts)
+  rownames(gtmat) <- letters[seq_len(nrow(gtmat))]
+  colnames(gtmat) <- paste0("pos_", seq_len(ncol(gtmat)))
+  gtmat <- as.data.frame(gtmat)
+
+
+  bench::mark(
+    rmcl = McCOIL_categorical(
+      data = gtmat,
+      err_method = 3,
+      path = tempdir(),
+    ),
+    coiaf = lapply(f, coiaf::compute_coi, "sim"),
+    min_iterations = min_iterations,
+    check = FALSE
+  )
+}
+```
+
+```{r}
+rmcl_vs_coiaf <- benchmark(1000, 100, 10)
+
+wilcox.test(rmcl_vs_coiaf$time[[1]], rmcl_vs_coiaf$time[[2]], paired = TRUE)$p.value
+```
+
+***
+
+Looking at the speed of our bootstrapping methods.
+
+```{r}
+sim <- coiaf::sim_biallelic(coi = 3, plmaf = runif(1000, 0, 0.5))
+
+bench::mark(
+  discrete_1_cpu = bootstrap_ci(sim, replicates = 100, solution_method = "continuous", ncpus = 1),
+  discrete_10_cpu = bootstrap_ci(sim, replicates = 100, solution_method = "continuous", ncpus = 16),
+  min_iterations = 10,
+  memory = FALSE,
+  check = FALSE
+)
+```
+
