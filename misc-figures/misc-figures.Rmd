@@ -127,9 +127,8 @@ plot
 
 ```{r save fig 1, eval = FALSE}
 ggsave(
-  filename = "~/Desktop/Malaria/manuscript-figures/Fig4.tiff",
-  # filename = "/Users/arisp/Desktop/Malaria/coiaf/internal/toverall.png",
-  # device = "tiff",
+  filename = here::here("misc-figures", "methods-flowchart2.png"),
+  device = "png",
   width = 2000,
   height = 1800,
   units = "px",
@@ -198,7 +197,14 @@ patchwork::wrap_plots(plot_list) +
   theme(legend.position = "bottom") &
   theme(plot.tag = element_text(face = "bold"))
 
-ggsave("internal/bootstrapped_ci.png", device = "png", width = 2000, height = 1750, units = "px", dpi = "print")
+ggsave(
+  filename = here::here("misc-figures", "bootstrapped_ci.png"),
+  device = "png", 
+  width = 2000, 
+  height = 1750, 
+  units = "px", 
+  dpi = "print"
+)
 ```
 
 ## Unbiased PLMAF
@@ -298,4 +304,13 @@ par_grid %>%
   labs(x = "Number of Samples", y = "Observed PLMAF") +
   scale_color_continuous(name = "Max COI") +
   theme_coiaf()
+
+ggsave(
+  filename = here::here("misc-figures", "unbiased_plmaf.png"),
+  device = "png", 
+  width = 2000, 
+  height = 1750, 
+  units = "px", 
+  dpi = "print"
+)
 ```

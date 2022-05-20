@@ -144,7 +144,7 @@ bench_plot(bench_var) + bench_plot(bench_freq) +
   theme(legend.position = "bottom")
 
 ggsave(
-  "internal/bench-images/bench-soln-methods.png",
+  filename = here::here("benchmarking", "bench-images", "bench-soln-methods.png"),
   device = "png", 
   width = 2500, 
   height = 1500, 
@@ -203,7 +203,7 @@ bench_plot(bench_dis) + bench_plot(bench_cont) +
   theme(legend.position = "bottom")
 
 ggsave(
-  "internal/bench-images/bench-estim-methods.png",
+  filename = here::here("benchmarking", "bench-images", "bench-estim-methods.png"),
   device = "png", 
   width = 2500, 
   height = 1500, 
