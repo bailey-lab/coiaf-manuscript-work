@@ -5,6 +5,7 @@
 
 <!-- badges: start -->
 
+[![DOI](https://zenodo.org/badge/494618426.svg)](https://zenodo.org/badge/latestdoi/494618426)
 [![Requirement](https://img.shields.io/badge/requirement-coiaf-green)](https://github.com/bailey-lab/coiaf)
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
