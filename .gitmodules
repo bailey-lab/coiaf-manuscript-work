@@ -1,0 +1,3 @@
+[submodule "coiaf-real-data"]
+	path = coiaf-real-data
+	url = https://github.com/bailey-lab/coiaf-real-data.git
