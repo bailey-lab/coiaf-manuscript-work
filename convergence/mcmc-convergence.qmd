@@ -1,0 +1,79 @@
+---
+title: "MCMC Convergence"
+author: "Aris Paschalidis"
+format: html
+editor: visual
+execute:
+  cache: true
+---
+
+```{r load packages}
+#| include: FALSE
+library(McCOILR)
+library(ggplot2)
+```
+
+In this document, we explore the necessary number of MCMC chains that are necessary for THE REAL McCOIL to converge on an estimate. To do so, we simulate some complex data and examine the needed number of chains. We simulate complex data to account for the worst case scenario.
+
+```{r simulate data}
+withr::local_seed(173)
+
+# Setup inputs
+n_cois <- 100
+coi <- as.integer(rep(1:20, 5))
+coi <- rlang::set_names(coi, ~ paste0("sample_", seq_along(.)))
+plmaf <- runif(1000, 0, 0.5)
+seq_error <- 0.05
+
+# Simulate data
+sim_data <- purrr::map(
+  coi,
+  coiaf::sim_biallelic,
+  plmaf = plmaf,
+  coverage = 100,
+  overdispersion = 1,
+  relatedness = 0.2,
+  epsilon = seq_error
+)
+
+# Compute genotypes
+genotypes <- purrr::map(sim_data, function(x) {
+    gtmat <- x$data$wsmaf
+    gtmat[gtmat >= (1 - seq_error)] <- 1
+    gtmat[gtmat <= seq_error] <- 0
+    gtmat[gtmat > seq_error & gtmat < (1 - seq_error)] <- 0.5
+    gtmat
+  })
+
+# Get genotype matrix to feed into RMCL
+gtmat <- do.call(rbind, genotypes)
+colnames(gtmat) <- paste0("pos_", seq_len(ncol(gtmat)))
+gtmat <- as.data.frame(gtmat)
+```
+
+We next run THE REAL McCOIL on the simulated data.
+
+```{r run rmcl}
+#| results: FALSE
+rmcl <- McCOIL_categorical(
+  data = gtmat,
+  maxCOI = 25,
+  totalrun = 5000,
+  burnin = 2000,
+  M0 = 5,
+  err_method = 3,
+  path = tempdir(),
+)
+```
+
+When we run THE REAL McCOIL, the software generates an output file, `"output.txt"`, that contains the results of each MCMC. The first column indicates the MCMC run, the next set of columns indicate the estimated COI for each sample, and the remaining columns show the allele frequency of each allele. Therefore, by plotting the estimated COI for a given sample, we can understand whether the MCMC converges.
+
+```{r get output}
+chains <- read.table(paste0(tempdir(), "/output.txt"))
+chains_coi <- chains %>% 
+  dplyr::slice_tail(n = -2) %>%
+  dplyr::select(1:101)
+plot(chains_coi$V73)
+```
+
+Examining the MCMC chains, we see that in general the algorithm converges with 5,000 iterations and a burn-in period of 1,000. As a result, we can use these parameters when comparing the performance of THE REAL McCOIL and coiaf.
