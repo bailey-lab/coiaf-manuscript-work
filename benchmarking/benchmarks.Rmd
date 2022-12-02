@@ -61,7 +61,8 @@ bench_stats <- function(bench) {
 
   stats <- bench %>%
     dplyr::select(expression, COI, Loci, time) %>%
-    dplyr::mutate(expression = as.character(expression))
+    dplyr::mutate(expression = as.character(expression)) %>% 
+    dplyr::filter(COI != 1)
 
   if ("Discrete" %in% stats$expression) {
     discrete <- stats %>%
