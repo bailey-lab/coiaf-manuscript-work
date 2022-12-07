@@ -1,50 +1,77 @@
 library(coiaf)
 library(McCOILR)
 
+# Declare file location
+here::i_am("benchmarking/benchmark-script.R")
+
+# Initialize variables
+# Note that these variables can be controlled from the global environment if
+# the user chooses to run an RStudio job
+# n_loci = 100
+# n_samples = 100
+
+# Print info on variables
+cli::cli_inform("Running {n_loci} loci and {n_samples} samples.")
+
 # Submit job to slurm
 benchmark <- function(n_loci, n_samples, min_iterations) {
-  set.seed(500)
+  withr::local_output_sink(new = nullfile())
+  withr::local_seed(500)
 
-  missingness <- 0.05
   coi <- as.integer(runif(n_samples, 1, 10))
+  coi <- rlang::set_names(coi, ~ paste0("sample_", seq_along(.)))
   plmaf <- runif(n_loci, 0, 0.5)
 
   # create genotype matrix for this using sim biallelic
-  f <- lapply(seq_len(n_samples), function(x) {
-    coiaf::sim_biallelic(coi[x], plmaf, epsilon = 0.05)
-  })
+  sim_data <- purrr::map(coi, ~ coiaf::sim_biallelic(.x, plmaf))
 
-  # now let's create out genotype matrix for RMCL
-  gts <- lapply(f, function(x) {
+  # Compute genotypes
+  seq_error <- 0.01
+  genotypes <- purrr::map(sim_data, function(x) {
     gtmat <- x$data$wsmaf
-    gtmat[gtmat >= 0.95] <- 1
-    gtmat[gtmat <= 0.05] <- 1
-    gtmat[gtmat < 0.95 & gtmat > 0.05] <- 0.5
-    gtmat[which(as.logical(rbinom(100, 1, 0.05)))] <- -1
-    return(gtmat)
+    gtmat[gtmat >= (1 - seq_error)] <- 1
+    gtmat[gtmat <= seq_error] <- 0
+    gtmat[gtmat > seq_error & gtmat < (1 - seq_error)] <- 0.5
+    gtmat
   })
 
-  # group together to get out gtmat
-  gtmat <- do.call(rbind, gts)
-  rownames(gtmat) <- letters[seq_len(nrow(gtmat))]
+  # Get genotype matrix to feed into RMCL
+  gtmat <- do.call(rbind, genotypes)
   colnames(gtmat) <- paste0("pos_", seq_len(ncol(gtmat)))
   gtmat <- as.data.frame(gtmat)
-
 
   bench::mark(
     rmcl = McCOIL_categorical(
       data = gtmat,
       maxCOI = 25,
-      totalrun = 100000,
-      burnin = 1000,
+      totalrun = 5000,
+      burnin = 2000,
+      M0 = 5,
       err_method = 3,
-      path = tempdir(),
+      path = tempdir()
     ),
-    coiaf_disc = lapply(f, coiaf::compute_coi, "sim"),
-    coiaf_cont = lapply(f, coiaf::optimize_coi, "sim"),
+    coiaf_disc = lapply(sim_data, coiaf::compute_coi, data_type = "sim"),
+    coiaf_cont = lapply(sim_data, coiaf::optimize_coi, data_type = "sim"),
+    coiaf_boot = lapply(sim_data, coiaf::bootstrap_ci, parallel = FALSE),
+    coiaf_boot_par = lapply(sim_data, coiaf::bootstrap_ci, parallel = TRUE),
     min_iterations = min_iterations,
-    check = FALSE
+    check = FALSE,
+    memory = FALSE
   )
 }
 
-results <- benchmark(n_loci = 1000, n_samples = 100, min_iterations = 10)
+results <- benchmark(
+  n_loci = n_loci,
+  n_samples = n_samples,
+  min_iterations = 10
+)
+
+# Save data
+saveRDS(
+  results,
+  here::here(
+    "benchmarking",
+    "results",
+    glue::glue("l{ n_loci }_s{ n_samples }.rds")
+  )
+)
