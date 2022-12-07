@@ -210,3 +210,77 @@ ggsave(
 From these results, we can see that for small numbers of loci, the discrete
 method is almost twice as fast as the continuous method. However, as the number
 of loci increases, this difference becomes smaller.
+
+# coiaf vs RMCL
+
+In order to compare THE REAL McCOIL to coiaf, we compare our base methods,
+our bootstrapped methods, against THE REAL McCOIL. The benchmarking runs for 
+this are outlined in separate file. Here we work on organizing and visualizing 
+those results.
+
+```{r import data}
+# Extract all the files
+files <- fs::dir_ls(here::here("benchmarking", "rmcl-coiaf-data")) %>%
+  vctrs::vec_set_names(fs::path_file(.))
+
+# Merge the data sets together
+data <- purrr::map(files, readRDS) %>%
+  dplyr::bind_rows(.id = "file") %>%
+  dplyr::mutate(
+    stringr::str_extract_all(file, "\\d+", simplify = TRUE) %>%
+      tibble::as_tibble() %>%
+      rlang::set_names(c("loci", "samples"))
+  )
+```
+
+To plot the data, we can either plot the median run time over 10 iterations,
+or create a boxplot.
+
+```{r boxplot}
+# Plot boxplot
+data %>%
+  dplyr::mutate(
+    loci = forcats::fct(loci, levels = c("100", "500", "1000", "5000")),
+    expression = as.character(expression)
+  ) %>%
+  tidyr::unnest(c(time, gc)) %>% 
+  ggplot(plot_data, aes(x = loci, y = time, color = expression)) +
+  geom_boxplot() +
+  facet_wrap(~ samples, scales = "free_y") +
+  coiaf::theme_coiaf()
+```
+
+```{r median run time}
+# Plot median
+data %>%
+  dplyr::mutate(
+    loci = as.numeric(loci),
+    samples = ifelse(samples == 100, "100 Samples", "500 Samples"),
+    expression = forcats::as_factor(as.character(expression)),
+    expression = forcats::fct_recode(
+      expression,
+      "Bootstrapped coiaf" = "coiaf_boot",
+      "Parallelized Bootstrapped coiaf" = "coiaf_boot_par",
+      "Continuous coiaf" = "coiaf_cont",
+      "Discrete coiaf" = "coiaf_disc",
+      "THE REAL McCOIL" = "rmcl",
+    )
+  ) %>%
+  ggplot(aes(x = loci, y = median, color = expression, group = expression)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ samples, scales = "free_y") +
+  labs(x = "Number of Loci", y = "Median Run Time (s)", color = "") +
+  coiaf::theme_coiaf() +
+  theme(legend.position = "bottom")
+
+ggsave(
+  filename = here::here("benchmarking", "bench-images", "rmcl-vs-coiaf.png"),
+  device = "png", 
+  width = 2500, 
+  height = 1500, 
+  units = "px", 
+  dpi = "print"
+)
+```
+
