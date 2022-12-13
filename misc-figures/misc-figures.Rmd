@@ -26,7 +26,7 @@ library(patchwork)
 set.seed(1)
 
 # Define the number of loci and the distribution of minor allele frequencies
-L <- 1e3
+L <- 1000
 p <- stats::rbeta(L, 1, 5)
 p[p > 0.5] <- 1 - p[p > 0.5]
 ```
@@ -34,29 +34,39 @@ p[p > 0.5] <- 1 - p[p > 0.5]
 ```{r data points for methods}
 set.seed(30)
 sim <- sim_biallelic(coi = 4, plmaf = p, coverage = 400)
+plot_data <- sim$data %>% 
+  dplyr::mutate(homo = ifelse(sim$data$wsmaf <= 0 | sim$data$wsmaf >= 1, TRUE, FALSE))
+  
 
 # All data
 data_points <- ggplot() +
-  geom_point(data = sim$data, aes(x = plmaf, y = wsmaf), alpha = 0.5) +
+  geom_point(data = plot_data, aes(x = plmaf, y = wsmaf, color = homo)) +
+  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
   theme_coiaf() +
+  guides(color = "none") +
   labs(x = "PLMAF", y = "WSMAF", title = "All Data Points")
 
 # Variant data
-variant_data <- data.frame(
-  plmaf = sim$data$plmaf,
-  wsmaf = ifelse(sim$data$wsmaf <= 0 | sim$data$wsmaf >= 1, 0, 1)
-)
 variant <- ggplot() +
-  geom_point(data = variant_data, aes(x = plmaf, y = wsmaf), alpha = 0.5) +
+  geom_point(
+    data = dplyr::mutate(
+      plot_data, 
+      wsmaf = ifelse(sim$data$wsmaf <= 0 | sim$data$wsmaf >= 1, 0, 1)
+    ),
+    aes(x = plmaf, y = wsmaf, color = homo), 
+  ) +
+  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
   theme_coiaf() +
+  guides(color = "none") +
   labs(x = "PLMAF", y = "Variant Site", title = "Variants")
 
 # Heterozygous data
-het_data <- data.frame(wsmaf = sim$data$wsmaf, plmaf = sim$data$plmaf) %>%
-  dplyr::filter(wsmaf > 0 & wsmaf < 1)
-
 het <- ggplot() +
-  geom_point(data = het_data, aes(x = plmaf, y = wsmaf), alpha = 0.5) +
+  geom_point(
+    data = dplyr::filter(plot_data, !homo),
+    aes(x = plmaf, y = wsmaf), 
+    color = "#242F40"
+  ) +
   theme_coiaf() +
   labs(x = "PLMAF", y = "WSMAF", title = "Heterozygous Data")
 ```
@@ -66,48 +76,61 @@ het <- ggplot() +
 process_variant <- process_sim(sim, coi_method = "variant", bin_size = 50)
 
 variant_final <- ggplot() +
-  geom_point(data = variant_data, aes(x = plmaf, y = wsmaf), alpha = 0.5) +
-  geom_line(aes(x = p, y = 1 - p^1 - (1 - p)^1), color = "red", linetype = 2) +
-  geom_line(aes(x = p, y = 1 - p^2 - (1 - p)^2), color = "red", linetype = 2) +
-  geom_line(aes(x = p, y = 1 - p^3 - (1 - p)^3), color = "red", linetype = 2) +
-  geom_line(aes(x = p, y = 1 - p^4 - (1 - p)^4), color = "red", linetype = 2) +
+  geom_point(
+    data = dplyr::mutate(
+      plot_data, 
+      wsmaf = ifelse(sim$data$wsmaf <= 0 | sim$data$wsmaf >= 1, 0, 1)
+    ),
+    aes(x = plmaf, y = wsmaf, color = homo), 
+  ) +
+  geom_line(aes(x = p, y = 1 - p^1 - (1 - p)^1), color = "#E55934", linetype = 2) +
+  geom_line(aes(x = p, y = 1 - p^2 - (1 - p)^2), color = "#E55934", linetype = 2) +
+  geom_line(aes(x = p, y = 1 - p^3 - (1 - p)^3), color = "#E55934", linetype = 2) +
+  geom_line(aes(x = p, y = 1 - p^4 - (1 - p)^4), color = "#E55934", linetype = 2) +
   annotate(
     geom = "text", x = 0.47, y = 1 - 0.5^(0:1) + 0.05,
-    label = c("COI = 1", "COI = 2"), col = "red", size = 7 / .pt
+    label = c("COI = 1", "COI = 2"), col = "#FF1B1C", size = 7 / .pt
   ) +
   annotate(
     geom = "text", x = 0.47, y = 1 - 0.5^(2:3) - 0.025,
-    label = c("COI = 3", "COI = 4"), col = "red", size = 7 / .pt
+    label = c("COI = 3", "COI = 4"), col = "#E55934", size = 7 / .pt
   ) +
+  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
   theme_coiaf() +
-  theme(axis.title.y.right = element_text(color = "red")) +
+  guides(color = "none") +
+  theme(axis.title.y.right = element_text(color = "#E55934")) +
   labs(x = "PLMAF", y = "Variant Site", title = "Variant Method")
 
 # Processed Frequency Method
 process_freq <- process_sim(sim, coi_method = "frequency", bin_size = 50)
 
 freq_final <- ggplot() +
-  geom_point(data = het_data, aes(x = plmaf, y = wsmaf), alpha = 0.5) +
+  geom_point(
+    data = dplyr::filter(plot_data, !homo),
+    aes(x = plmaf, y = wsmaf), 
+    color = "#242F40"
+  ) +
   geom_line(aes(x = p, y = (p - p^2) / (1 - p^2 - (1 - p)^2)),
-    color = "red", linetype = 2
+    color = "#E55934", linetype = 2
   ) +
   geom_line(aes(x = p, y = (p - p^3) / (1 - p^3 - (1 - p)^3)),
-    color = "red", linetype = 2
+    color = "#E55934", linetype = 2
   ) +
   geom_line(aes(x = p, y = (p - p^4) / (1 - p^4 - (1 - p)^4)),
-    color = "red", linetype = 2
+    color = "#E55934", linetype = 2
   ) +
   annotate(
     geom = "text", x = 0.01, y = 1 / 3:4 + 0.03,
-    label = c("COI = 3", "COI = 4"), col = "red",
+    label = c("COI = 3", "COI = 4"), col = "#E55934",
     size = 7 / .pt, angle = "8"
   ) +
   annotate(
     geom = "text", x = 0.02, y = 1 / 2 + 0.04,
-    label = c("COI = 2"), col = "red", size = 7 / .pt
+    label = c("COI = 2"), col = "#E55934", size = 7 / .pt
   ) +
   theme_coiaf() +
-  theme(axis.title.y.right = element_text(color = "red")) +
+  guides(color = "none") +
+  theme(axis.title.y.right = element_text(color = "#E55934")) +
   labs(x = "PLMAF", y = "WSMAF", title = "Frequency Method")
 ```
 
@@ -127,7 +150,7 @@ plot
 
 ```{r save fig 1, eval = FALSE}
 ggsave(
-  filename = here::here("misc-figures", "methods-flowchart2.png"),
+  filename = here::here("misc-figures", "methods-flowchart.png"),
   device = "png",
   width = 2000,
   height = 1800,
@@ -255,7 +278,7 @@ estimate_plmaf <- function(true_plmaf, max_coi, samples, alpha) {
     c_j <- rbinom(j, 1, true_plmaf)
     
     # draw strain proportions from Dirichlet
-    s_j <- rdirichlet(rep(alpha, j))
+    s_j <- coiaf:::rdirichlet(rep(alpha, j))
     
     # find wsmaf by summing the product
     w_i <- sum(c_j * s_j)
