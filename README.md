@@ -15,12 +15,13 @@ This repository contains code used to prepare the manuscript for the
 package [{coiaf}](https://github.com/bailey-lab/coiaf). It includes the
 following folders and files:
 
--   `benchmarking` contains various files used to benchmark our software
-    package and the resulting figures.
--   `coiaf-real-data` is a git submodule pointing to the repository used
-    to analyze sequencing data using coiaf.
--   `misc-figures` contains code for various figures.
--   `sensitivity-analysis-stats.Rmd` contains code to compute statistics
-    on our sensitivity analysis results. Note that the code to generate
-    the sensitivity analysis results and the resulting figures are
-    included as vignettes in the coiaf package.
+- `benchmarking` contains various files used to benchmark our software
+  package and the resulting figures.
+- `coiaf-real-data` is a git submodule pointing to the repository used
+  to analyze sequencing data using coiaf.
+- `convergence` contains files for determining how many bootstraps and
+  MCMC chains are needed for convergence.
+- `misc-figures` contains code for various figures.
+- `sensitivity-analysis` contains code for comparing THE REAL McCOIL to
+  coiaf on simulated data, the results, and code to compute statistics
+  on our sensitivity analysis results.
