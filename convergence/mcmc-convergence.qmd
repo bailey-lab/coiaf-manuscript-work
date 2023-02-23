@@ -76,4 +76,4 @@ chains_coi <- chains %>%
 plot(chains_coi$V73)
 ```
 
-Examining the MCMC chains, we see that in general the algorithm converges with 5,000 iterations and a burn-in period of 1,000. As a result, we can use these parameters when comparing the performance of THE REAL McCOIL and coiaf.
+Examining the MCMC chains, we see that in general the algorithm converges with 5,000 iterations and a burn-in period of 2,000. As a result, we can use these parameters when comparing the performance of THE REAL McCOIL and coiaf.
