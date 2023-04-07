@@ -1,13 +1,13 @@
 library(coiaf)
 
 # Define functions -------------------------------------------------------------
-sa <- function(coverage, loci, overdispersion, relatedness, seq_error) {
+sa <- function(coverage, loci, overdispersion, relatedness, epsilon) {
   param_grid <- tidyr::expand_grid(
     coverage = coverage,
     loci = loci,
     overdispersion = overdispersion,
     relatedness = relatedness,
-    seq_error = seq_error
+    epsilon = epsilon
   )
 
   purrr::pmap(param_grid, run_estimations)
@@ -17,12 +17,12 @@ run_estimations <- function(coverage,
                             loci,
                             overdispersion,
                             relatedness,
-                            seq_error) {
+                            epsilon) {
   rlang::check_required(coverage)
   rlang::check_required(loci)
   rlang::check_required(overdispersion)
   rlang::check_required(relatedness)
-  rlang::check_required(seq_error)
+  rlang::check_required(epsilon)
 
   withr::local_seed(2022)
 
@@ -40,15 +40,15 @@ run_estimations <- function(coverage,
     coverage = coverage,
     overdispersion = overdispersion,
     relatedness = relatedness,
-    epsilon = seq_error
+    epsilon = epsilon
   )
 
   # Compute genotypes
   genotypes <- purrr::map(sim_data, function(x) {
     gtmat <- x$data$wsmaf
-    gtmat[gtmat >= (1 - seq_error)] <- 1
-    gtmat[gtmat <= seq_error] <- 0
-    gtmat[gtmat > seq_error & gtmat < (1 - seq_error)] <- 0.5
+    gtmat[gtmat >= (1 - epsilon)] <- 1
+    gtmat[gtmat <= epsilon] <- 0
+    gtmat[gtmat > epsilon & gtmat < (1 - epsilon)] <- 0.5
     gtmat
   })
 
@@ -116,7 +116,7 @@ run_estimations <- function(coverage,
 
   # Adjust estimated plmafs
   coiaf_plamf_adj <- colMeans(coiaf_plmaf) -
-    (((0.5 - colMeans(coiaf_plmaf)) * 2) * seq_error)
+    (((0.5 - colMeans(coiaf_plmaf)) * 2) * epsilon)
 
   plmaf_res <- tibble::tibble(
     loci = rmcl$name[rmcl$CorP == "P"],
@@ -168,8 +168,8 @@ results <- sa(
   # overdispersion = c(0.01, 0.05, 0.1, 0.15),
   relatedness = 0,
   # relatedness = c(0.05, 0.25, 0.5),
-  seq_error = 0
-  # seq_error = c(0.005, 0.01, 0.015)
+  # epsilon = 0
+  epsilon = c(0.005, 0.01, 0.015)
 )
 
 saveRDS(
@@ -185,7 +185,7 @@ saveRDS(
 # Generate figures for SA
 seqerr %>%
   purrr::imap(~ .x[[1]]) %>%
-  purrr::map2(paste("Sequence Error =", c(0.005, 0.01, 0.015)), plot_cois) %>%
+  purrr::map2(paste("Epsilon =", c(0.005, 0.01, 0.015)), plot_cois) %>%
   patchwork::wrap_plots(nrow = 1) +
   patchwork::plot_annotation(tag_levels = "A") +
   patchwork::plot_layout(guides = "collect") &
@@ -206,7 +206,7 @@ ggplot2::ggsave(
 # Plot PLMAF coiaf vs RMCL
 seqerr %>%
   purrr::imap(~ .x[[2]]) %>%
-  purrr::map2(paste("Sequence Error =", c(0.005, 0.01, 0.015)), function(x, title) {
+  purrr::map2(paste("Epsilon =", c(0.005, 0.01, 0.015)), function(x, title) {
     x %>%
       tidyr::pivot_longer(
         cols = c("RMCL", "coiaf"),
