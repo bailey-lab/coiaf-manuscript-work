@@ -41,9 +41,12 @@ plot_data <- sim$data %>%
 # All data
 data_points <- ggplot() +
   geom_point(data = plot_data, aes(x = plmaf, y = wsmaf, color = homo)) +
-  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
+  scale_colour_discrete(
+    name = "", 
+    type = c("#242F40", "#CCA43B"), 
+    labels = c("Heterozygous Loci", "Homozygous Loci")
+  ) +
   theme_coiaf() +
-  guides(color = "none") +
   labs(x = "PLMAF", y = "WSMAF", title = "All Data Points")
 
 # Variant data
@@ -55,9 +58,12 @@ variant <- ggplot() +
     ),
     aes(x = plmaf, y = wsmaf, color = homo), 
   ) +
-  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
+  scale_colour_discrete(
+    name = "", 
+    type = c("#242F40", "#CCA43B"), 
+    labels = c("Heterozygous Loci", "Homozygous Loci")
+  ) +
   theme_coiaf() +
-  guides(color = "none") +
   labs(x = "PLMAF", y = "Variant Site", title = "Variants")
 
 # Heterozygous data
@@ -95,9 +101,12 @@ variant_final <- ggplot() +
     geom = "text", x = 0.47, y = 1 - 0.5^(2:3) - 0.025,
     label = c("COI = 3", "COI = 4"), col = "#E55934", size = 7 / .pt
   ) +
-  scale_colour_discrete(type = c("#242F40", "#CCA43B")) +
+  scale_colour_discrete(
+    name = "", 
+    type = c("#242F40", "#CCA43B"), 
+    labels = c("Heterozygous Loci", "Homozygous Loci")
+  ) +
   theme_coiaf() +
-  guides(color = "none") +
   theme(axis.title.y.right = element_text(color = "#E55934")) +
   labs(x = "PLMAF", y = "Variant Site", title = "Variant Method")
 
@@ -129,7 +138,7 @@ freq_final <- ggplot() +
     label = c("COI = 2"), col = "#E55934", size = 7 / .pt
   ) +
   theme_coiaf() +
-  guides(color = "none") +
+  # guides(color = "none") +
   theme(axis.title.y.right = element_text(color = "#E55934")) +
   labs(x = "PLMAF", y = "WSMAF", title = "Frequency Method")
 ```
@@ -142,8 +151,12 @@ plot <- (plot_spacer() +
 ) /
   (variant | het) /
   (variant_final | freq_final) +
+  plot_layout(guides = "collect") +
   plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(face = "bold"))
+  theme(
+    plot.tag = element_text(face = "bold"),
+    legend.position = "bottom"
+  )
 
 plot
 ```
