@@ -13,30 +13,43 @@ library(coiaf)
 library(ggplot2)
 ```
 
-In this document, we explore the convergence of bootstrapping replicates. In other words, we aim to identify how many replicates are needed before our bootstrapping functions produce a relatively small confidence interval. We first run our bootstrapped functions with a varying number of replicates.
+In this document, we explore the convergence of bootstrapping replicates. In other words, we aim to identify how many replicates are needed before our bootstrapping functions produce a relatively small confidence interval. We first run our bootstrapped functions with a varying number of replicates across different simulated COI values.
 
 ```{r bootstrap}
 #| warning: FALSE
-sim_data <- sim_biallelic(coi = 5, plmaf = runif(1000, 0, 0.5))
-n_bootstraps <- c(seq(10, 100, 10), seq(200, 1000, 100))
-bootstraps <- purrr::map_dfr(n_bootstraps, function(rep) {
-  bootstrap_ci(sim_data, replicates = rep)
+n_coi <- seq(2, 10, 2)
+bootstraps <- purrr::map_dfr(n_coi, function(coi) {
+  sim_data <- sim_biallelic(coi = coi, plmaf = runif(1000, 0, 0.5))
+  n_bootstraps <- c(seq(10, 100, 10), seq(200, 1000, 100))
+  purrr::map_dfr(n_bootstraps, function(rep) {
+    bootstrap_ci(sim_data, seq_error = 0, replicates = rep)
+  }) %>% 
+    tibble::add_column(n_bootstraps = n_bootstraps)
 }) %>% 
-  tibble::add_column(n_bootstraps = n_bootstraps)
+  dplyr::mutate(sim_coi = rep(n_coi, each = 19))
 ```
 
-Following running our algorithm, we can next plot our data with the x-axis representing the number of bootstrap replicates used and the y-axis representing the standard error.
+Following running our algorithm, we can next plot our data with the x-axis representing the number of bootstrap replicates used and the y-axis representing the standard error. The color of each line indicates the COI with which data was simulated.
 
 ```{r convergence}
 bootstraps %>% 
-  dplyr::filter(std.error != 0) %>% 
-  ggplot(aes(x = n_bootstraps, y = std.error)) +
+  dplyr::mutate(sim_coi = forcats::as_factor(sim_coi)) %>% 
+  ggplot(aes(x = n_bootstraps, y = std.error, color = sim_coi)) +
   geom_point() +
   geom_line() +
+  geom_vline(xintercept = 100, linetype = "dashed") +
   scale_x_continuous(breaks = seq(0, 1000, 100)) +
-  labs(y = "Standard Error", x = "Number of Bootstraps") +
+  labs(y = "Standard Error", x = "Number of Bootstraps", color = "Simulated COI") +
   theme_coiaf()
+
+ggsave(
+  filename = here::here("convergence", "bootstrapping-convergence.png"),
+  device = "png", 
+  width = 2000, 
+  height = 1750, 
+  units = "px", 
+  dpi = "print"
+)
 ```
 
 Looking at the figure produced, we note that after 100 bootstrap iterations there is little difference in the standard error, even as the number of bootstraps increases. As a result, we can set the default number of replicates in our bootstrapping function to 100.
-
