@@ -12,6 +12,7 @@ knitr::opts_chunk$set(
 )
 
 library(coiaf)
+library(McCOILR)
 library(patchwork)
 ```
 
@@ -284,3 +285,107 @@ ggsave(
 )
 ```
 
+## Confidence interval comparison
+
+We note that for a fair comparison of our bootstrapped methods and THE REAL
+McCOIL, it is important to illustrate that the confidence intervals between the
+two software packages are comparable.
+
+```{r simulate data}
+withr::local_seed(211)
+
+# Setup inputs
+n_coi <- rep(seq(2, 10, 2), 10)
+n_coi <- rlang::set_names(n_coi, ~ paste0("sample_", seq_along(.)))
+plmaf <- runif(1000, 0, 0.5)
+seq_error <- 0
+
+# Simulate data
+sim_data <- purrr::map(
+  n_coi,
+  coiaf::sim_biallelic,
+  plmaf = plmaf,
+  coverage = 200,
+)
+
+# Compute genotypes
+genotypes <- purrr::map(sim_data, function(x) {
+    gtmat <- x$data$wsmaf
+    gtmat[gtmat >= (1 - seq_error)] <- 1
+    gtmat[gtmat <= seq_error] <- 0
+    gtmat[gtmat > seq_error & gtmat < (1 - seq_error)] <- 0.5
+    gtmat
+  })
+
+# Get genotype matrix to feed into RMCL
+gtmat <- do.call(rbind, genotypes)
+colnames(gtmat) <- paste0("pos_", seq_len(ncol(gtmat)))
+gtmat <- as.data.frame(gtmat)
+```
+
+We can the run the algorithm with 5,000 iterations and a burn-in period of 2,000—the reasoning for why we use these values is described in another file.
+
+```{r run software}
+# Run coiaf
+coiaf <- purrr::map(sim_data, coiaf::bootstrap_ci, parallel = FALSE) %>% 
+  purrr::list_rbind()
+
+# Run THE REAL McCOIL
+rmcl <- McCOIL_categorical(
+  data = gtmat,
+  maxCOI = 25,
+  totalrun = 5000,
+  burnin = 2000,
+  M0 = 5,
+  err_method = 3,
+  path = tempdir(),
+)
+```
+
+The last step is to extract the COI estimates.
+
+```{r extract output}
+coiaf_density <- coiaf %>% 
+  tidyr::unnest_longer(estimates) %>% 
+  select(estimates)
+
+# Extract output
+chains <- read.table(paste0(tempdir(), "/output.txt"))
+chains_coi <- chains %>% 
+  dplyr::slice_tail(n = -2) %>%
+  dplyr::select(2:6) %>% 
+  tidyr::pivot_longer(everything(), names_to = "sim_coi", values_to = "estimates") %>% 
+  dplyr::mutate(
+    sim_coi = forcats::as_factor(sim_coi),
+    sim_coi = forcats::fct_recode(
+      sim_coi, "2" = "V2", "4" = "V3", "6" = "V4", "8" = "V5", "10" = "V6"
+    )
+  ) %>% 
+  dplyr::filter(estimates < 100)
+```
+
+```{r plot estimates}
+# Merge data
+dens_data <- bind_rows(
+  list(coiaf = coi_density, "THE REAL McCOIL" = chains_coi), 
+  .id = "software"
+) %>% 
+  mutate(sim_coi = forcats::as_factor(paste0("COI = ", n_coi)))
+
+# Plot
+ggplot(dens_data, aes(x = estimates, group = software, fill = software)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ sim_coi, nrow = 1, scales = "free") +
+  labs(x = "Estimated COI", y = "Density", fill = "Software") +
+  theme_coiaf() +
+  theme(legend.position = "bottom")
+
+ggsave(
+  filename = here::here("benchmarking", "bootstrapping-coi-density.png"),
+  device = "png", 
+  width = 2000, 
+  height = 1750, 
+  units = "px", 
+  dpi = "print"
+)
+```
