@@ -1,0 +1,90 @@
+---
+title: "Independence Assumption"
+author: "Aris Paschalidis"
+format: html
+editor: visual
+execute:
+  cache: true
+---
+
+```{r install pkgs}
+#| include: FALSE
+library(coiaf)
+library(ggplot2)
+```
+
+In this document, we explore how breaking the assumption of independent loci alters the confidence interval of estimates. We simulate two sets of data with varying levels of dependence between loci. One set of data is simulated with complete independence between loci while the other one has dependent loci. Both data sets are composed of 1,000 loci. In the dependent case, 500 loci are treated as independent and these loci are duplicated for a total of 1,000 loci. By duplicating loci, we can simulate dependence.
+
+```{r simulate correlated data}
+# Simulate across COIs from 2 to 10
+n_coi <- seq(2, 10, 2)
+
+# Bootstrap for independent data
+boot_no_ld <- purrr::map_dfr(1:10, ~
+  purrr::map_dfr(n_coi, function(coi) {
+    no_ld <- sim_biallelic(coi = coi, plmaf = runif(1000, 0, 0.5))
+    bootstrap_ci(no_ld, seq_error = 0)
+  })
+)
+
+# Bootstrap for dependent loci
+boot_ld_500 <- purrr::map_dfr(1:10, ~
+  purrr::map_dfr(n_coi, function(coi) {
+    ld_500 <- sim_biallelic(coi = coi, plmaf = runif(500, 0, 0.5))
+    ld_500$data <- ld_500$data %>% dplyr::slice(rep(1:dplyr::n(), each = 2))
+    bootstrap_ci(ld_500, seq_error = 0)
+  })
+)
+```
+
+Having simulated the data and run our methods, we can obtain the bootstrapped estimates.
+
+```{r extract density of estimates}
+# Extract estimates
+dens <- purrr::map(
+  list(no_ld = boot_no_ld, ld_500 = boot_ld_500), 
+  function(data) {
+    data %>%
+      dplyr::mutate(sim_coi = forcats::as_factor(rep(paste("COI =", n_coi), 10))) %>% 
+      tidyr::unnest_longer(estimates) %>% 
+      dplyr::select(estimates, sim_coi)
+}) %>%
+  purrr::list_rbind(names_to = "id")
+```
+
+To compare the data sets, we can plot the distribution of estimates or compare the mean, standard deviation, and 95% quantile range of the distribution.
+
+```{r plot and table}
+# Plot
+dens %>% 
+  dplyr::mutate(id = forcats::fct_recode(
+    id, 
+    "Independent Loci" = "no_ld",
+    "Dependent Loci" = "ld_500",
+  )) %>% ggplot(aes(x = estimates, group = id, fill = id)) +
+  geom_density(alpha = 0.5) +
+  facet_grid(vars(sim_coi), scales = "free") +
+  labs(x = "Estimated COI", y = "Density", fill = "") +
+  theme_coiaf() +
+  theme(legend.position = "bottom")
+
+ggsave(
+  filename = here::here("independence-assumption", "independence-coi-density.png"),
+  device = "png", 
+  width = 2250, 
+  height = 1500, 
+  units = "px", 
+  dpi = "print"
+)
+
+# Table
+dens %>% 
+  dplyr::group_by(id, sim_coi) %>% 
+  dplyr::summarize(
+    mean = mean(estimates), 
+    sd = sd(estimates), 
+    low = quantile(estimates, 0.025),
+    high = quantile(estimates, 0.975)
+  ) %>% 
+  gt::gt()
+```
