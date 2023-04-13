@@ -35,29 +35,38 @@ alpha_plot <- ggplot(pars, aes(alpha, mean, color = as.factor(coi))) +
   ) +
   annotation_logticks(sides = "b") +
   ylab("Proportion of total parasite density contributed \nby highest density parasite strain") +
-  # xlab("Alpha (Parameter controlling overdispersion \nof parasite densities)") +
   xlab("Alpha") +
-  # ggtitle("Dashed lines show maximum parasite density if \nall strains had the same parasite density, i.e. 1/COI") +
   scale_colour_viridis_d(name = "COI", option = "H") +
   theme_coiaf() +
-  theme(plot.title = element_text(size = 10))
+  theme(
+    plot.title = element_text(size = 10),
+    legend.title = element_text(size = 10)
+  )
 
 # Plot for impact of changing overdispersion parameter -------------------------
 # Set params and get data
-overd <- c(0.5, 1, 5, 10, 100)
+overd <- seq(0, 0.25, 0.05)
 counts <- 0:100
 res <- list()
-for (i in seq_along(overd)) {
-  res[[i]] <- data.frame(
-    "prob" = emdbook::dbetabinom(
-      counts,
-      prob = 0.5,
-      theta = overd[i],
-      size = max(counts)
-    ),
-    "counts" = counts,
-    "overdispersion" = overd[i]
-  )
+for(i in seq_along(overd)){
+  if(overd[i] == 0){
+    res[[i]] <- data.frame(
+      "prob" = dbinom(counts, max(counts), prob = 0.5),
+      "counts" = counts,
+      "overdispersion" = overd[i]
+    )
+  } else {
+    res[[i]] <- data.frame(
+      "prob" = emdbook::dbetabinom(
+        counts,
+        shape1 = 0.5/overd[i],
+        shape2 = 0.5/overd[i],
+        size = max(counts)
+      ),
+      "counts" = counts,
+      "overdispersion" = overd[i]
+    )
+  }
 }
 
 # Plot
@@ -67,15 +76,21 @@ over_plot <- do.call(rbind, res) %>%
   geom_line() +
   ylab("Probability Density") +
   xlab("Reference Reads") +
-  scale_colour_viridis_d(name = "Overdispersion\nin Sequencing") +
-  theme_coiaf() +
   ggtitle("Sequence Coverage = 100,\nExpected Reference Reads = 50") +
-  theme(plot.title = element_text(size = 10))
+  scale_color_viridis_d(name = "Overdispersion\nin Sequencing") +
+  ggpubr::theme_pubclean() +
+  theme(
+    axis.line = element_line(), legend.position = "right",
+    panel.grid.major.y = element_blank(), panel.grid = element_blank(),
+    legend.key = element_rect(fill = "white"),
+    plot.title = element_text(hjust = 0.5, size = 10),
+    legend.title = element_text(size = 10)
+  )
 
 # Combine plots ----------------------------------------------------------------
 alpha_plot + over_plot +
   plot_annotation(tag_levels = "A") &
-  theme(plot.tag = element_text(face = 'bold'))
+  theme(plot.tag = element_text(face = "bold"))
 
 # Save
 ggsave(
