@@ -21,6 +21,9 @@ following folders and files:
   to analyze sequencing data using coiaf.
 - `convergence` contains files for determining how many bootstraps and
   MCMC chains are needed for convergence.
+- `independence-assumption` contains code to examine how the addition of
+  non-independent loci alters the confidence interval of point
+  estimates.
 - `misc-figures` contains code for various figures.
 - `sensitivity-analysis` contains code for comparing THE REAL McCOIL to
   coiaf on simulated data, the results, and code to compute statistics
