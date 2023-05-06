@@ -346,8 +346,9 @@ The last step is to extract the COI estimates.
 
 ```{r extract output}
 coiaf_density <- coiaf %>% 
+  mutate(sim_coi = forcats::as_factor(n_coi)) %>% 
   tidyr::unnest_longer(estimates) %>% 
-  select(estimates)
+  select(estimates, sim_coi)
 
 # Extract output
 chains <- read.table(paste0(tempdir(), "/output.txt"))
@@ -361,16 +362,16 @@ chains_coi <- chains %>%
       sim_coi, "2" = "V2", "4" = "V3", "6" = "V4", "8" = "V5", "10" = "V6"
     )
   ) %>% 
-  dplyr::filter(estimates < 100)
+  dplyr::filter(estimates < 25)
 ```
 
 ```{r plot estimates}
 # Merge data
 dens_data <- bind_rows(
-  list(coiaf = coi_density, "THE REAL McCOIL" = chains_coi), 
+  list(coiaf = coiaf_density, "THE REAL McCOIL" = chains_coi), 
   .id = "software"
 ) %>% 
-  mutate(sim_coi = forcats::as_factor(paste0("COI = ", n_coi)))
+  mutate(sim_coi = forcats::as_factor(paste0("COI = ", sim_coi)))
 
 # Plot
 ggplot(dens_data, aes(x = estimates, group = software, fill = software)) +
